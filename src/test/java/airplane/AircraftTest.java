@@ -115,5 +115,81 @@ public class AircraftTest {
         });
     }
 
-   
+    @Test
+    public void testTakeOffAbortsWhenEngineStartFails() {
+        when(engineMock.isOperational()).thenReturn(true);
+        when(fuelSystemMock.hasEnoughFuel()).thenReturn(true);
+        when(navigationSystemMock.isRouteAvailable()).thenReturn(true);
+        aircraft.prepareForTakeoff();
+
+        doThrow(new RuntimeException("Engine stalled")).when(engineMock).start();
+
+        assertThrows(FlightException.class, () -> {
+            aircraft.takeOff();
+        });
+        
+        assertEquals(FlightStatus.ABORTED, aircraft.getStatus());
+    }
+
+    @Test
+    public void testCruiseEmergencyLandsWhenEngineNotOperational() {
+        when(engineMock.isOperational()).thenReturn(true);
+        when(fuelSystemMock.hasEnoughFuel()).thenReturn(true);
+        when(navigationSystemMock.isRouteAvailable()).thenReturn(true);
+        aircraft.prepareForTakeoff();
+        aircraft.takeOff();
+
+        when(engineMock.isOperational()).thenReturn(false);
+
+        aircraft.cruise(100.0);
+
+        verify(landingGearMock).deploy();
+        verify(engineMock).stop();
+        assertEquals(FlightStatus.LANDED, aircraft.getStatus());
+    }
+
+    @Test
+    public void testCruiseEmergencyLandsWhenFuelSystemFails() {
+        when(engineMock.isOperational()).thenReturn(true);
+        when(fuelSystemMock.hasEnoughFuel()).thenReturn(true);
+        when(navigationSystemMock.isRouteAvailable()).thenReturn(true);
+        aircraft.prepareForTakeoff();
+        aircraft.takeOff();
+        doThrow(new RuntimeException("Fuel leak")).when(fuelSystemMock).consumeFuel(any(Double.class));
+
+        assertThrows(FlightException.class, () -> {
+            aircraft.cruise(50.0);
+        });
+        verify(landingGearMock).deploy();
+        verify(engineMock).stop();
+        assertEquals(FlightStatus.LANDED, aircraft.getStatus());
+    }
+
+    @Test
+    public void testPrepareForTakeoffFailsWithInsufficientFuel() {
+        when(engineMock.isOperational()).thenReturn(true);
+        
+        when(fuelSystemMock.hasEnoughFuel()).thenReturn(false); 
+
+        assertThrows(FlightException.class, () -> {
+            aircraft.prepareForTakeoff();
+        });
+        
+        assertEquals(FlightStatus.GROUNDED, aircraft.getStatus()); 
+    }
+    
+    @Test
+    public void testNormalLandingSuccess() {
+        when(engineMock.isOperational()).thenReturn(true);
+        when(fuelSystemMock.hasEnoughFuel()).thenReturn(true);
+        when(navigationSystemMock.isRouteAvailable()).thenReturn(true);
+        aircraft.prepareForTakeoff();
+        aircraft.takeOff();
+        
+        aircraft.land();
+        
+        verify(landingGearMock).deploy();
+        verify(engineMock).stop();
+        assertEquals(FlightStatus.LANDED, aircraft.getStatus());
+    }
 }
